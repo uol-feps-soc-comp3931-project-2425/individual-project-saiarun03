@@ -35,7 +35,7 @@ class FixedSizeQueue:
 model_path = os.path.join('runs','detect','train5','weights','best.pt')
 model = YOLO(model_path)
 
-video_path = os.path.join('videos','test1.mp4')
+video_path = os.path.join('videos','test.mp4')
 cap = cv2.VideoCapture(video_path)
 ret = True
 prevTime = 0
