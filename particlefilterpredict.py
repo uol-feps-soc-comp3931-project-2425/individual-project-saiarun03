@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import json
 import os
-import time
 import psutil
 import matplotlib.pyplot as plt
 
