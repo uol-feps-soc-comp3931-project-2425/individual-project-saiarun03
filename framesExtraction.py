@@ -2,8 +2,8 @@ import cv2
 import os
 
 # Set video path
-video_path = "videos/youtube_video.f399.mp4"  # Change this to your video file
-output_folder = "frames2"  # Folder to save frames
+video_path = "videos/test2.mp4"  # Change this to your video file
+output_folder = "frames3 "  # Folder to save frames
 frame_rate = 1  # Extract one frame every 5 frames
 
 # Create output folder if it doesn't exist

@@ -2,9 +2,9 @@ import os
 import json
 
 # Paths
-image_folder = "dataset_ordered/images"
-label_folder = "dataset_ordered/labels"
-output_folder = "ground_truth"
+image_folder = "dataset_orderedv2/images"
+label_folder = "dataset_orderedv2/labels"
+output_folder = "ground_truthv2"
 
 os.makedirs(output_folder, exist_ok=True)
 
