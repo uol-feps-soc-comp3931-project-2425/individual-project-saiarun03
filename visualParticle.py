@@ -1,41 +1,46 @@
-import cv2
-import time
-import math
 import os
-import json
-import numpy as np
+import time
 from collections import deque
+
+import cv2
+import numpy as np
 from ultralytics import YOLO
 
-# === PF Tracker ===
 class ParticleFilter:
+    """Particle filter for 2D position tracking."""
     def __init__(self, num_particles, init_pos, frame_size):
         self.num_particles = num_particles
-        self.particles = np.ones((num_particles, 2)) * np.array(init_pos)
-        self.weights = np.ones(num_particles) / num_particles
-        self.frame_size = frame_size
+        self.particles = np.tile(init_pos, (num_particles, 1))
+        self.weights = np.full(num_particles, 1 / num_particles)
+        self.frame_h, self.frame_w = frame_size
 
     def predict(self, std_dev=10):
+        """Add Gaussian noise and clamp to frame bounds."""
         noise = np.random.randn(self.num_particles, 2) * std_dev
         self.particles += noise
-        self.particles[:, 0] = np.clip(self.particles[:, 0], 0, self.frame_size[1])
-        self.particles[:, 1] = np.clip(self.particles[:, 1], 0, self.frame_size[0])
+        self.particles[:, 0] = np.clip(self.particles[:, 0], 0, self.frame_w)
+        self.particles[:, 1] = np.clip(self.particles[:, 1], 0, self.frame_h)
 
     def update(self, measurement, std_dev=15):
+        """Weight particles by distance to measurement."""
         dists = np.linalg.norm(self.particles - measurement, axis=1)
         self.weights = np.exp(-dists**2 / (2 * std_dev**2)) + 1e-8
-        self.weights /= np.sum(self.weights)
+        self.weights /= self.weights.sum()
 
     def resample(self):
-        indices = np.random.choice(self.num_particles, self.num_particles, p=self.weights)
-        self.particles = self.particles[indices]
-        self.weights.fill(1.0 / self.num_particles)
+        """Resample particles proportional to their weights."""
+        idx = np.random.choice(
+            self.num_particles, self.num_particles, p=self.weights
+        )
+        self.particles = self.particles[idx]
+        self.weights.fill(1 / self.num_particles)
 
     def estimate(self):
+        """Return weighted mean position."""
         return np.average(self.particles, axis=0, weights=self.weights).astype(int)
 
-# === Trail Queue ===
 class FixedSizeQueue:
+    """Fixed-length queue for recent positions."""
     def __init__(self, max_size):
         self.queue = deque(maxlen=max_size)
     
@@ -44,102 +49,84 @@ class FixedSizeQueue:
 
     def get_queue(self):
         return self.queue
-    
-    def __len__(self):
-        return len(self.queue)
 
-# === Init ===
-model_path = os.path.join('runs', 'detect', 'train5', 'weights', 'best.pt')
-model = YOLO(model_path)
-
-video_path = os.path.join('videos', 'test2.mp4')
-cap = cv2.VideoCapture(video_path)
-
+# Initialize model and video
+model = YOLO(os.path.join('runs', 'detect', 'train5', 'weights', 'best.pt'))
+cap = cv2.VideoCapture(os.path.join('videos', 'test2.mp4'))
 frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-pf_filter = None
-pf_trail = FixedSizeQueue(10)
-
-prev_frame_time = 0
-frame_id = 0
+pf = None
+trail = FixedSizeQueue(10)
+prev_time = 0
 paused = False
 
 while True:
     ret, frame = cap.read()
     if not ret:
         break
-    frame_id += 1
 
-    new_time = time.time()
-    fps = 1 / (new_time - prev_frame_time) if prev_frame_time else 0
-    prev_frame_time = new_time
+    # Compute FPS
+    curr_time = time.time()
+    fps = 1 / (curr_time - prev_time) if prev_time else 0
+    prev_time = curr_time
 
-    # === YOLOv8 Detection ===
-    results = model.track(frame, persist=True, conf=0.35, verbose=False)
+    # Detect ball (class 0)
+    results = model.track(frame, conf=0.35, persist=True, verbose=False)
     boxes = results[0].boxes
-
     detected = False
-    cx, cy = None, None
 
-    if boxes and len(boxes.xyxy) > 0:
-        for i in range(len(boxes.cls)):
-            if int(boxes.cls[i].item()) == 0:
-                x1, y1, x2, y2 = map(int, boxes.xyxy[i].tolist())
-                cx = int((x1 + x2) / 2)
-                cy = int((y1 + y2) / 2)
+    if boxes and len(boxes.xyxy):
+        for cls, xyxy in zip(boxes.cls, boxes.xyxy):
+            if int(cls) == 0:
+                x1, y1, x2, y2 = map(int, xyxy.tolist())
+                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
                 detected = True
                 break
 
-    # === Init PF if detection found ===
     if detected:
-        if pf_filter is None:
-            pf_filter = ParticleFilter(300, (cx, cy), (frame_h, frame_w))
+        # Initialize filter on first detection
+        if pf is None:
+            pf = ParticleFilter(300, (cx, cy), (frame_h, frame_w))
 
-        pf_filter.predict()
-        pf_filter.update(np.array([cx, cy]))
-        pf_filter.resample()
-        est_x, est_y = pf_filter.estimate()
-        pf_trail.add((est_x, est_y))
+        # PF cycle
+        pf.predict()
+        pf.update(np.array([cx, cy]))
+        pf.resample()
+        ex, ey = pf.estimate()
+        trail.add((ex, ey))
 
-        # Draw detection & estimate
-        cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)  # Red = YOLO
-        cv2.circle(frame, (est_x, est_y), 5, (255, 0, 0), -1)  # Blue = PF estimate
+        cv2.circle(frame, (cx, cy), 5, (0, 0, 255), -1)  # YOLO
+        cv2.circle(frame, (ex, ey), 5, (255, 0, 0), -1)  # PF estimate
 
-    # === Draw PF trail ===
-    trail = list(pf_trail.get_queue())
-    for i in range(1, len(trail)):
-        cv2.line(frame, trail[i - 1], trail[i], (255, 0, 0), 2)  # Blue trail
+    # Draw trail
+    pts = list(trail.get_queue())
+    for p0, p1 in zip(pts, pts[1:]):
+        cv2.line(frame, p0, p1, (255, 0, 0), 2)
 
-    # === Predict Future Path (Linear) ===
-    if len(trail) >= 2:
-        x_diff = trail[-1][0] - trail[-2][0]
-        y_diff = trail[-1][1] - trail[-2][1]
-
-        future = [trail[-1]]
+    # Linear future prediction
+    if len(pts) >= 2:
+        dx, dy = pts[-1][0] - pts[-2][0], pts[-1][1] - pts[-2][1]
+        future = [pts[-1]]
         for _ in range(4):
-            next_pos = (future[-1][0] + x_diff, future[-1][1] + y_diff)
-            future.append(next_pos)
+            future.append((future[-1][0] + dx, future[-1][1] + dy))
+        for p0, p1 in zip(future, future[1:]):
+            cv2.line(frame, p0, p1, (0, 255, 0), 2)
+            cv2.circle(frame, p1, 3, (0, 0, 255), -1)
 
-        for i in range(1, len(future)):
-            cv2.line(frame, future[i - 1], future[i], (0, 255, 0), 2)
-            cv2.circle(frame, future[i], 3, (0, 0, 255), -1)
+    # Display
+    cv2.putText(frame, f"FPS: {int(fps)}", (20, 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+    cv2.imshow("Particle Filter Visual", cv2.resize(frame, (1000, 600)))
 
-    # === Display ===
-    cv2.putText(frame, f"FPS: {int(fps)}", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-    frame_resized = cv2.resize(frame, (1000, 600))
-    cv2.imshow("Particle Filter Visual", frame_resized)
-
-    key = cv2.waitKey(80)
+    key = cv2.waitKey(80) & 0xFF
     if key == ord('q'):
         break
-    elif key == ord(' '):
+    if key == ord(' '):
         paused = not paused
         while paused:
-            key = cv2.waitKey(30) & 0xFF
-            if key == ord(' '):
-                paused = not paused
-            elif key == ord('q'):
+            k = cv2.waitKey(30) & 0xFF
+            if k in (ord(' '), ord('q')):
                 paused = False
                 break
 
