@@ -34,7 +34,7 @@ def initialize_kalman_filter():
 model_path = os.path.join('runs','detect','train5','weights','best.pt')
 model = YOLO(model_path)
 
-video_path = os.path.join('videos','test3.mp4')
+video_path = os.path.join('videos','test2.mp4')
 cap = cv2.VideoCapture(video_path)
 
 kalman = initialize_kalman_filter()

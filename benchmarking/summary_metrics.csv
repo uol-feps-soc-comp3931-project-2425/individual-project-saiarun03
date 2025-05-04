@@ -1,0 +1,5 @@
+Clip,Tracker,Global_RMSE(px),Global_MAE(px),Average_FPS
+Fast-Bowling,Kalman Filter,229.00,186.34,6.03
+Fast-Bowling,Particle Filter,162.65,157.02,6.14
+Spin-Bowling,Kalman Filter,586.76,562.29,5.57
+Spin-Bowling,Particle Filter,622.95,616.96,5.87

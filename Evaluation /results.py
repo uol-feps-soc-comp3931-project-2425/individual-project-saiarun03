@@ -96,20 +96,20 @@ def load_predictions(pred_folder, suffix):
             out[fid] = (data['center_x'], data['center_y'])
     return out
 
-def compute_tracker_errors(gt_pos, pred_pos, eval_frames):
-    """On the subset of TP frames, compute RMSE and MAE."""
-    y_true, y_pred = [], []
-    for fid in eval_frames:
-        if fid in gt_pos and fid in pred_pos:
-            y_true.append(gt_pos[fid])
-            y_pred.append(pred_pos[fid])
-    if not y_true:
-        return np.nan, np.nan
-    y_true = np.array(y_true)
-    y_pred = np.array(y_pred)
-    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-    mae  = mean_absolute_error(y_true, y_pred)
-    return rmse, mae
+# def compute_tracker_errors(gt_pos, pred_pos, eval_frames):
+#     """On the subset of TP frames, compute RMSE and MAE."""
+#     y_true, y_pred = [], []
+#     for fid in eval_frames:
+#         if fid in gt_pos and fid in pred_pos:
+#             y_true.append(gt_pos[fid])
+#             y_pred.append(pred_pos[fid])
+#     if not y_true:
+#         return np.nan, np.nan
+#     y_true = np.array(y_true)
+#     y_pred = np.array(y_pred)
+#     rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+#     mae  = mean_absolute_error(y_true, y_pred)
+#     return rmse, mae
 
 if __name__ == "__main__":
     ensure_dir(RESULTS_ROOT)
@@ -163,35 +163,35 @@ if __name__ == "__main__":
 
         eval_frames = tp_frames_map[best_thr]
 
-        # 6) Compute KF/PF errors
-        errors = {}
-        for tracker in ("KF","PF"):
-            preds = load_predictions(pred_folder, tracker)
-            rmse, mae = compute_tracker_errors(gt_pos, preds, eval_frames)
-            errors[tracker] = (rmse, mae)
-            print(f"   [{tracker}] on {len(eval_frames)} TP‑frames → "
-                  f"RMSE={rmse:.2f}px, MAE={mae:.2f}px")
+        # # 6) Compute KF/PF errors
+        # errors = {}
+        # for tracker in ("KF","PF"):
+        #     preds = load_predictions(pred_folder, tracker)
+        #     rmse, mae = compute_tracker_errors(gt_pos, preds, eval_frames)
+        #     errors[tracker] = (rmse, mae)
+        #     print(f"   [{tracker}] on {len(eval_frames)} TP‑frames → "
+        #           f"RMSE={rmse:.2f}px, MAE={mae:.2f}px")
 
-        # 7) Plot tracker errors
-        x      = np.arange(len(errors))
-        rmse_v = [errors[t][0] for t in errors]
-        mae_v  = [errors[t][1] for t in errors]
-        labels = list(errors.keys())
-        w      = 0.35
+        # # 7) Plot tracker errors
+        # x      = np.arange(len(errors))
+        # rmse_v = [errors[t][0] for t in errors]
+        # mae_v  = [errors[t][1] for t in errors]
+        # labels = list(errors.keys())
+        # w      = 0.35
 
-        plt.figure(figsize=(6,4))
-        plt.bar(x - w/2, rmse_v, w, label="RMSE")
-        plt.bar(x + w/2, mae_v,  w, label="MAE")
-        plt.xticks(x, labels)
-        plt.ylabel("Error (px)")
-        plt.title(f"{clip_name}: Tracker Errors @ thr={best_thr:.3f}")
-        plt.legend()
-        plt.grid(axis='y')
-        plt.tight_layout()
-        if SAVE_PLOTS:
-            # ↓ comment out this line to disable saving tracker-errors plot
-            plt.savefig(os.path.join(out_dir, "tracker_errors.png"))
-        if SHOW_PLOTS:
-            # ↓ comment out this line to disable interactive display
-            plt.show()
-        plt.close()
+        # plt.figure(figsize=(6,4))
+        # plt.bar(x - w/2, rmse_v, w, label="RMSE")
+        # plt.bar(x + w/2, mae_v,  w, label="MAE")
+        # plt.xticks(x, labels)
+        # plt.ylabel("Error (px)")
+        # plt.title(f"{clip_name}: Tracker Errors @ thr={best_thr:.3f}")
+        # plt.legend()
+        # plt.grid(axis='y')
+        # plt.tight_layout()
+        # if SAVE_PLOTS:
+        #     # ↓ comment out this line to disable saving tracker-errors plot
+        #     plt.savefig(os.path.join(out_dir, "tracker_errors.png"))
+        # if SHOW_PLOTS:
+        #     # ↓ comment out this line to disable interactive display
+        #     plt.show()
+        # plt.close()
